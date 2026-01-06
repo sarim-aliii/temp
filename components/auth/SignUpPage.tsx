@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { useApi } from '../../hooks/useApi';
 import { Button } from '../ui/Button';
@@ -147,12 +147,12 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({ onSwitchToLogin, onSignU
                         />
                     </div>
 
-                    {/* Error Display Block */}
+                    {/* Error Display Block - CLEANED UP */}
                     {(validationErrors.form || apiError) && (
                          <div className="p-3 bg-red-900/20 border border-red-500/20 rounded flex items-start gap-3">
                             <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
                             <p className="text-xs text-red-200 font-mono leading-relaxed">
-                                ERR_CODE: {validationErrors.form || apiError}
+                                {validationErrors.form || apiError}
                             </p>
                         </div>
                     )}
@@ -160,7 +160,8 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({ onSwitchToLogin, onSignU
                     <Button 
                         type="submit" 
                         disabled={isLoading} 
-                        className="w-full h-12 bg-black text-black hover:bg-zinc-200 hover:scale-[1.02] active:scale-[0.98] transition-all font-mono tracking-widest text-xs font-bold rounded flex items-center justify-center gap-2 mt-2"
+                        // FIXED: Changed bg-black to bg-white so text is visible
+                        className="w-full h-12 bg-white text-black hover:bg-zinc-200 hover:scale-[1.02] active:scale-[0.98] transition-all font-mono tracking-widest text-xs font-bold rounded flex items-center justify-center gap-2 mt-2"
                     >
                         {isLoading ? <Loader spinnerClassName="w-4 h-4 text-black" /> : (
                             <>

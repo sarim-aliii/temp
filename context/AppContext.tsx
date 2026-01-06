@@ -5,26 +5,25 @@ import {
     User,
     NotificationType
 } from '../types';
-import useLocalStorage from '../hooks/useLocalStorage';
-import * as api from '../services/api';
+import useLocalStorage from '../hooks/useLocalStorage'; 
+import { authApi, userApi } from '../services/api';
 import { auth } from '../firebase';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-
 
 interface AppContextType {
     // Auth
     isAuthenticated: boolean;
     currentUser: User | null;
-    loading: boolean; 
+    loading: boolean;
     login: (credentials: LoginCredentials) => Promise<void>;
     loginWithGoogle: () => Promise<void>;
     signup: (credentials: SignupCredentials) => Promise<void>;
     logout: () => void;
     verifyEmail: (token: string) => Promise<void>;
     requestPasswordReset: (email: string) => Promise<void>;
-    resetPassword: (token: string, newPassword: string) => Promise<void>;
+    resetPassword: (data: { email: string; otp: string; password: string }) => Promise<void>;
     updateUserName: (name: string) => Promise<void>;
-
+    updateUserAvatar: (avatar: string) => Promise<void>;
 
     // UI State
     theme: 'dark' | 'light';
@@ -35,17 +34,32 @@ interface AppContextType {
     removeNotification: (id: number) => void;
 }
 
+interface Notification {
+    id: number;
+    message: string;
+    type: NotificationType;
+}
+
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [userToken, setUserToken] = useLocalStorage<string | null>('authToken', null);
+    const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
 
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [theme, setTheme] = useLocalStorage<'dark' | 'light'>('theme', 'dark');
 
-    const isAuthenticated = !!userToken && !!currentUser;
+    const isAuthenticated = !!token && !!currentUser;
+
+    const handleSetToken = (newToken: string | null) => {
+        setToken(newToken);
+        if (newToken) {
+            localStorage.setItem('token', newToken);
+        } else {
+            localStorage.removeItem('token');
+        }
+    };
 
     // Theme effect
     useEffect(() => {
@@ -73,11 +87,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setNotifications(prev => prev.filter(n => n.id !== id));
     }, []);
 
+    // --- USER PROFILE UPDATES ---
     const updateUserName = async (name: string) => {
         if (!currentUser) return;
         try {
-            const updatedUser = await api.updateProfile({ name });
-            setCurrentUser(updatedUser);
+            const updatedUser = await userApi.updateProfile({ name });
+            setCurrentUser(updatedUser.data || updatedUser);
             addNotification("Username updated!", "success");
         } catch (error: any) {
             addNotification(error.message || "Failed to update username");
@@ -86,34 +101,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const updateUserAvatar = async (avatar: string) => {
         if (!currentUser) return;
+        const previousUser = { ...currentUser };
         setCurrentUser({ ...currentUser, avatar });
+        
         try {
-            await api.updateProfile({ avatar });
+            await userApi.updateProfile({ avatar });
             addNotification("Avatar updated!", "success");
         } catch (e: any) {
+            setCurrentUser(previousUser);
             addNotification("Failed to save avatar", "error");
         }
     };
 
-
     // --- LOGOUT ---
     const logout = useCallback(() => {
-        setUserToken(null);
+        handleSetToken(null);
         setCurrentUser(null);
-        api.setAuthToken(null);
-    }, [setUserToken]);
+        window.location.href = '/#/login'; 
+    }, []);
 
+    // --- INIT AUTH ---
     useEffect(() => {
         const initAuth = async () => {
             setLoading(true);
-            if (userToken) {
-                api.setAuthToken(userToken);
+            const storedToken = localStorage.getItem('token');
+            
+            if (storedToken) {
+                if (token !== storedToken) setToken(storedToken);
+
                 try {
-                    const user = await api.getProfile();
-                    setCurrentUser(user);
+                    const response = await authApi.getMe();
+                    const userData = response.data || response;
+                    setCurrentUser(userData);
                 } 
                 catch (error) {
-                    console.error("Profile check failed", error);
+                    console.error("Session restore failed", error);
                     logout();
                 }
             }
@@ -121,25 +143,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         };
 
         initAuth();
-    }, []); // Run once on mount
+    }, []); 
 
-
-    // Auth Functions
+    // --- AUTH ACTIONS ---
     const login = async (credentials: LoginCredentials) => {
         try {
-            const data = await api.login(credentials);
-            setUserToken(data.token);
+            const response = await authApi.login(credentials);
+            const data = response.data || response;
+            
+            handleSetToken(data.token);
+            
             setCurrentUser({
-                _id: data._id,
-                name: data.name,
-                email: data.email,
-                avatar: data.avatar,
-                xp: data.xp,
-                level: data.level,
-                currentStreak: data.currentStreak,
-                todos: data.todos || []
+                _id: data.user._id || data.user.id,
+                name: data.user.name,
+                email: data.user.email,
+                avatar: data.user.avatar,
+                isVerified: data.user.isVerified,
             });
-            api.setAuthToken(data.token);
         } catch (error: any) {
             addNotification(error.message || 'Login failed.');
             throw error;
@@ -148,38 +168,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const signup = async (credentials: SignupCredentials) => {
         try {
-            await api.signup(credentials);
-            addNotification('Sign up successful! Please check your email for the verification code.', 'success');
+            await authApi.signup(credentials);
+            addNotification('Sign up successful! Please check your email.', 'success');
         } catch (error: any) {
             addNotification(error.message || 'Sign up failed.');
             throw error;
         }
     };
 
-    const handleSocialLoginSuccess = async (data: any, providerName: string) => {
-        setUserToken(data.token);
+    const handleSocialLoginSuccess = async (response: any, providerName: string) => {
+        const data = response.data || response;
+        handleSetToken(data.token);
+
         setCurrentUser({
-            _id: data._id,
-            name: data.name,
-            email: data.email,
-            avatar: data.avatar,
-            xp: data.xp,
-            level: data.level,
-            currentStreak: data.currentStreak
+            _id: data.user?._id || data.user.id,
+            name: data.user?.name,
+            email: data.user?.email,
+            avatar: data.user?.avatar,
+            isVerified: data.user?.isVerified,
         });
-        api.setAuthToken(data.token);
         addNotification(`Logged in with ${providerName}!`, 'success');
     };
 
     const loginWithGoogle = async () => {
         try {
             const provider = new GoogleAuthProvider();
-            provider.setCustomParameters({
-                prompt: 'select_account'
-            });
+            provider.setCustomParameters({ prompt: 'select_account' });
+            
             const result = await signInWithPopup(auth, provider);
             const idToken = await result.user.getIdToken();
-            const data = await api.googleLogin(idToken);
+            
+            const data = await authApi.googleLogin(idToken);
             await handleSocialLoginSuccess(data, 'Google');
         }
         catch (error: any) {
@@ -189,21 +208,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
     };
 
-    const verifyEmail = async (token: string) => {
+    const verifyEmail = async (otpCode: string) => {
         try {
-            const data = await api.verifyEmail(token);
-            setUserToken(data.token);
+            const response = await authApi.verifyEmail(otpCode);
+            const data = response.data || response;
+
+            if (data.token) {
+                handleSetToken(data.token);
+            }
+
             setCurrentUser({
-                _id: data._id,
-                name: data.name,
-                email: data.email,
-                avatar: data.avatar,
-                xp: data.xp,
-                level: data.level,
-                currentStreak: data.currentStreak,
-                todos: data.todos || []
+                _id: data.user?._id || data.user.id,
+                name: data.user?.name,
+                email: data.user?.email,
+                avatar: data.user?.avatar,
+                isVerified: true,
             });
-            api.setAuthToken(data.token);
             addNotification('Email verified successfully! Logging you in...', 'success');
         } 
         catch (error: any) {
@@ -214,7 +234,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const requestPasswordReset = async (email: string) => {
         try {
-            await api.forgotPassword(email);
+            await authApi.forgotPassword(email);
             addNotification('If an account exists, a reset email has been sent.', 'success');
         } catch (error: any) {
             addNotification(error.message || 'Failed to request password reset.');
@@ -222,9 +242,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
     };
 
-    const resetPassword = async (token: string, newPassword: string) => {
+    const resetPassword = async (data: { email: string; otp: string; password: string }) => {
         try {
-            await api.resetPassword(token, newPassword);
+            await authApi.resetPassword(data);
             addNotification('Password reset successfully! Please log in.', 'success');
         } catch (error: any) {
             addNotification(error.message || 'Password reset failed.');

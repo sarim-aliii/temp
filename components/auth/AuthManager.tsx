@@ -8,8 +8,7 @@ import { ArrowLeft, ShieldAlert } from 'lucide-react';
 
 type AuthView = 'login' | 'signup' | 'forgot-password' | 'verify-email' | 'reset-password';
 
-// 1. Internal Layout Component to apply the "Nothing" theme 
-// to pages that haven't been individually updated yet.
+
 const AuthLayout: React.FC<{ children: React.ReactNode; title?: string; onBack?: () => void }> = ({ children, title, onBack }) => (
   <div className="relative min-h-screen w-full flex flex-col items-center justify-center bg-black text-white selection:bg-red-500/30 selection:text-red-200 overflow-hidden">
     
@@ -87,9 +86,6 @@ export const AuthManager: React.FC = () => {
     const handlePasswordResetSuccess = () => {
         setView('login');
     };
-
-    // Note: LoginPage and SignUpPage are self-contained immersive components.
-    // The others are wrapped in AuthLayout to maintain the aesthetic.
     
     switch (view) {
         case 'login':

@@ -4,7 +4,7 @@ import { Input } from '../ui/Input';
 import OtpInput from '../ui/OtpInput'; 
 import { Loader } from '../ui/Loader';
 import { useApi } from '../../hooks/useApi';
-import { forgotPassword, resetPassword } from '../../services/api'; 
+import { authApi } from '../../services/api'; 
 import { KeyRound, Mail, ArrowLeft, ShieldAlert, CheckCircle2, AlertCircle, Signal } from 'lucide-react';
 
 interface ForgotPasswordPageProps {
@@ -31,12 +31,11 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({ onSucces
   const { 
     execute: sendCode, 
     loading: isSending 
-  } = useApi(forgotPassword);
-
+  } = useApi(authApi.forgotPassword);
   const { 
     execute: reset, 
     loading: isResetting 
-  } = useApi(resetPassword);
+  } = useApi(authApi.resetPassword);
 
   // --- STEP 1: SEND CODE ---
   const handleSendCode = async (e: React.FormEvent) => {
@@ -195,8 +194,7 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({ onSucces
                    <form onSubmit={handleResetPassword} className="space-y-5">
                        <div className="text-center space-y-3">
                            <label className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest block">Input Verification Token</label>
-                           <div className="flex justify-center">
-                               {/* Note: Ensure OtpInput has transparent/dark compatible styles or wrap it */}
+                           <div className="flex justify-center w-full">
                                <div className="dark-otp-wrapper"> 
                                     <OtpInput 
                                         length={6} 

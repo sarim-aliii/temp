@@ -2,12 +2,15 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IUser extends Document {
   email: string;
-  passHash: string;
+  passHash?: string;
   name?: string;
   avatar?: string;
   authMethod?: string; 
-  isVerified?: boolean;
-  verificationToken?: string;
+  isVerified: boolean;
+  
+  verificationCode?: string;
+  verificationCodeExpires?: Date;
+  
   resetPasswordToken?: string;
   resetPasswordExpire?: Date; 
   googleId?: string;
@@ -24,7 +27,10 @@ const UserSchema: Schema = new Schema(
     avatar: { type: String, default: 'https://picsum.photos/200' },
     authMethod: { type: String, default: 'email' },
     isVerified: { type: Boolean, default: false },
-    verificationToken: { type: String },
+  
+    verificationCode: { type: String, select: false },
+    verificationCodeExpires: { type: Date, select: false },
+    
     resetPasswordToken: { type: String },
     resetPasswordExpire: { type: Date },
     googleId: { type: String, sparse: true, unique: true },

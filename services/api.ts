@@ -1,105 +1,124 @@
-import axios from 'axios';
-import axiosInstance from './axiosInstance';
-import {
-  LoginCredentials,
-  SignupCredentials
-} from '../types';
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import { LoginCredentials, SignupCredentials } from '../types';
 
+interface ApiResponse<T = any> {
+  message?: string;
+  data: T;
+  success?: boolean;
+}
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+const REQUEST_TIMEOUT = 10000;
 
 const api = axios.create({
   baseURL: API_URL,
+  timeout: REQUEST_TIMEOUT,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-
-// --- Auth ---
-export const login = async (credentials: LoginCredentials) => {
-  const { data } = await api.post('/auth/login', credentials);
-  return data;
-};
-
-export const signup = async (credentials: SignupCredentials) => {
-  const { data } = await api.post('/auth/register', credentials);
-  return data;
-};
-
-export const googleLogin = async (idToken: string) => {
-  const { data } = await api.post('/auth/google', { idToken });
-  return data;
-};
-
-
-export const getProfile = async () => {
-  const { data } = await api.get('/auth/profile');
-  return data;
-};
-
-export const updateProfile = async (userData: { name?: string; avatar?: string }) => {
-  const { data } = await api.put('/auth/profile', userData);
-  return data;
-};
-
-export const verifyEmail = async (token: string) => {
-  const { data } = await api.post('/auth/verify-email', { token });
-  return data;
-};
-
-export const forgotPassword = async (email: string) => {
-  const { data } = await api.post('/auth/forgot-password', { email });
-  return data;
-};
-
-export const resetPassword = async (data: { email: string; otp: string; password: string }) => {
-  const response = await api.post('/auth/reset-password', data);
-  return response.data;
-};
-
-export const resendVerification = async (email: string) => {
-  const response = await axiosInstance.post('/auth/resend-verification', { email });
-  return response.data;
-};
-
-
-export const setAuthToken = (token: string | null) => {
-  if (token) {
-    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-  } else {
-    delete api.defaults.headers.common['Authorization'];
-  }
-};
+api.interceptors.request.use(
+  (config: InternalAxiosRequestConfig) => {
+    const token = localStorage.getItem('token');
+    if (token && config.headers) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    const message =
-      error.response?.data?.message || error.message || 'An unknown error occurred';
+  (error: AxiosError<any>) => {
+    const message = 
+      error.response?.data?.message || 
+      error.response?.data?.error || 
+      error.message || 
+      'An unexpected error occurred';
+
+
+    if (error.response?.status === 401) {
+       console.warn('Session expired. Redirecting to login...');
+       // localStorage.removeItem('token');
+       // window.location.href = '/login';
+    }
+
     return Promise.reject(new Error(message));
   }
 );
 
-// Automatically add token to requests if it exists
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
 
+// --- Authentication ---
 export const authApi = {
-  login: (data: any) => api.post('/auth/login', data),
-  signup: (data: any) => api.post('/auth/signup', data),
-  getMe: () => api.get('/auth/me'),
+  login: async (credentials: LoginCredentials) => {
+    const { data } = await api.post<ApiResponse>('/auth/login', credentials);
+    return data;
+  },
+
+  signup: async (credentials: SignupCredentials) => {
+    const { data } = await api.post<ApiResponse>('/auth/signup', credentials);
+    return data;
+  },
+
+  googleLogin: async (idToken: string) => {
+    const { data } = await api.post<ApiResponse>('/auth/google', { idToken });
+    return data;
+  },
+
+  verifyEmail: async (token: string) => {
+    const { data } = await api.post<ApiResponse>('/auth/verify-email', { token });
+    return data;
+  },
+
+  resendVerification: async (email: string) => {
+    const { data } = await api.post<ApiResponse>('/auth/resend-verification', { email });
+    return data;
+  },
+
+  forgotPassword: async (email: string) => {
+    const { data } = await api.post<ApiResponse>('/auth/forgot-password', { email });
+    return data;
+  },
+
+  resetPassword: async (payload: { email: string; otp: string; password: string }) => {
+    const { data } = await api.post<ApiResponse>('/auth/reset-password', payload);
+    return data;
+  },
+  
+  getMe: async () => {
+      const { data } = await api.get<ApiResponse>('/auth/me');
+      return data;
+  }
 };
 
+// --- User Profile ---
+export const userApi = {
+  getProfile: async () => {
+    const { data } = await api.get<ApiResponse>('/auth/profile');
+    return data;
+  },
+
+  updateProfile: async (userData: { name?: string; avatar?: string }) => {
+    const { data } = await api.put<ApiResponse>('/auth/profile', userData);
+    return data;
+  },
+};
+
+// --- Pairing System ---
 export const pairingApi = {
-  generateCode: () => api.post('/pairing/generate-code'),
-  linkPartner: (inviteCode: string) => api.post('/pairing/link-partner', { inviteCode }),
-};
+  generateCode: async () => {
+    const { data } = await api.post<ApiResponse>('/pairing/generate-code');
+    return data;
+  },
 
+  linkPartner: async (inviteCode: string) => {
+    const { data } = await api.post<ApiResponse>('/pairing/link-partner', { 
+      inviteCode: inviteCode.trim() 
+    });
+    return data;
+  },
+};
 
 export default api;
