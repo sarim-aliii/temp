@@ -11,10 +11,13 @@ interface VerifyEmailPageProps {
   onSuccess: () => void;
 }
 
-export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({ email, onSuccess }) => {
+export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({ email: propEmail, onSuccess }) => {
   const [token, setToken] = useState('');
   const [timer, setTimer] = useState(60);
   const [successMsg, setSuccessMsg] = useState('');
+
+  // --- FIX: Retrieve email from LocalStorage if prop is missing (handles refresh) ---
+  const email = localStorage.getItem('pendingVerificationEmail') || propEmail;
 
   const { 
     execute: verify, 
@@ -40,9 +43,22 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({ email, onSucce
   const handleVerification = async (code: string) => {
     setSuccessMsg('');
     if (!code || code.length < 6) return;
+    if (!email) {
+        // Fallback if no email is found anywhere
+        alert("Identity lost. Redirecting to initialization.");
+        window.location.href = '/'; 
+        return;
+    }
 
     try {
-      await verify(code);
+      // --- FIX: Send OBJECT with email AND token ---
+      // Note: This assumes useApi passes arguments to authApi.verifyEmail
+      // You may need to update api.ts to accept { email, token } if it doesn't already.
+      await verify({ email, token: code });
+      
+      // Clean up storage on success
+      localStorage.removeItem('pendingVerificationEmail');
+      
       onSuccess();
     } catch (err) {
       // Error handled by hook
@@ -50,9 +66,10 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({ email, onSucce
   };
 
   const handleResend = async () => {
+    if (!email) return;
     setSuccessMsg('');
     try {
-      await resend(email);
+      await resend({ email }); // Ensure resend also sends email object
       setSuccessMsg('SIGNAL_REFRESHED: CHECK_INBOX');
       setTimer(60); 
     } catch (err) {
@@ -65,11 +82,14 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({ email, onSucce
     handleVerification(token);
   };
 
+  if (!email) {
+      return <div className="h-screen w-full flex items-center justify-center bg-black text-white font-mono">NO IDENTITY FOUND. RESTARTING...</div>;
+  }
+
   return (
-    // LAYOUT FIX: h-screen + flex-col ensures header and content never overlap
     <div className="h-screen w-full flex flex-col bg-black text-white overflow-hidden relative">
 
-      {/* 1. Header (Takes natural space at top) */}
+      {/* 1. Header */}
       <header className="flex-none w-full px-6 py-6 flex justify-between items-center z-20">
          <div className="flex items-center gap-2">
             <Wifi size={16} className={`text-red-500 ${isLoading ? 'animate-pulse' : ''}`} />
@@ -81,7 +101,7 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({ email, onSucce
         </div>
       </header>
 
-      {/* 2. Main Content (Takes remaining space and centers card) */}
+      {/* 2. Main Content */}
       <main className="flex-1 flex items-center justify-center p-4 relative z-10">
         
         {/* Card Container */}
@@ -169,7 +189,7 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({ email, onSucce
         </div>
       </main>
 
-      {/* Global Background Elements (Fixed behind everything) */}
+      {/* Global Background Elements */}
       <div className="fixed inset-0 z-0 pointer-events-none">
           <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjMDAwIiAvPgo8cmVjdCB3aWR0aD0iMSIgaGVpZ2h0PSIxIiBmaWxsPSIjMzMzIiAvPgo8L3N2Zz4=')] opacity-20"></div>
           <div className="absolute top-[30%] left-[50%] -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-zinc-800/20 blur-[100px] rounded-full"></div>

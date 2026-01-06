@@ -1,10 +1,10 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import passport from 'passport';
 import { configurePassport } from './config/passport';
 import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
-import dotenv from 'dotenv';
 import connectDB from './db';
 import authRoutes from './routes/auth';
 import pairingRoutes from './routes/pairing';
@@ -23,8 +23,6 @@ import JournalEntry from './models/JournalEntry';
 import Logger from './utils/logger';
 import { getRoomId } from './utils/roomUtils';
 
-// --- Load Environment Variables ---
-dotenv.config();
 
 // --- Connect to Database ---
 connectDB();
@@ -37,7 +35,10 @@ app.use(cors({
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
+
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 app.use(passport.initialize());
 configurePassport(passport);
 

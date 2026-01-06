@@ -53,6 +53,10 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({ onSwitchToLogin, onSignU
     
     try {
       await createAccount({ email, password });
+      
+      // --- FIX: Save email to localStorage for persistence ---
+      localStorage.setItem('pendingVerificationEmail', email);
+      
       onSignUpSuccess(email);
     } catch (e) {
       // Error handled by hook
@@ -147,7 +151,7 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({ onSwitchToLogin, onSignU
                         />
                     </div>
 
-                    {/* Error Display Block - CLEANED UP */}
+                    {/* Error Display Block */}
                     {(validationErrors.form || apiError) && (
                          <div className="p-3 bg-red-900/20 border border-red-500/20 rounded flex items-start gap-3">
                             <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
@@ -160,7 +164,6 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({ onSwitchToLogin, onSignU
                     <Button 
                         type="submit" 
                         disabled={isLoading} 
-                        // FIXED: Changed bg-black to bg-white so text is visible
                         className="w-full h-12 bg-white text-black hover:bg-zinc-200 hover:scale-[1.02] active:scale-[0.98] transition-all font-mono tracking-widest text-xs font-bold rounded flex items-center justify-center gap-2 mt-2"
                     >
                         {isLoading ? <Loader spinnerClassName="w-4 h-4 text-black" /> : (

@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import bcrypt from 'bcryptjs';
 
 export interface IUser extends Document {
   email: string;
@@ -8,6 +9,7 @@ export interface IUser extends Document {
   authMethod?: string; 
   isVerified: boolean;
   
+  verificationToken?: string; 
   verificationCode?: string;
   verificationCodeExpires?: Date;
   
@@ -17,6 +19,10 @@ export interface IUser extends Document {
   isPremium: boolean;
   pairedWithUserId?: mongoose.Schema.Types.ObjectId;
   inviteCode?: string;
+
+  password?: string;
+
+  matchPassword(enteredPassword: string): Promise<boolean>;
 }
 
 const UserSchema: Schema = new Schema(
@@ -27,7 +33,8 @@ const UserSchema: Schema = new Schema(
     avatar: { type: String, default: 'https://picsum.photos/200' },
     authMethod: { type: String, default: 'email' },
     isVerified: { type: Boolean, default: false },
-  
+
+    verificationToken: { type: String, select: false },   
     verificationCode: { type: String, select: false },
     verificationCodeExpires: { type: Date, select: false },
     
@@ -40,5 +47,31 @@ const UserSchema: Schema = new Schema(
   },
   { timestamps: true }
 );
+
+UserSchema.virtual('password')
+  .set(function (password: string) {
+    this._password = password;
+  })
+  .get(function () {
+    return this._password;
+  });
+
+UserSchema.pre('save', async function (next) {
+  const user: any = this;
+
+  if (user._password) {
+    const salt = await bcrypt.genSalt(10);
+    user.passHash = await bcrypt.hash(user._password, salt);
+    user._password = undefined;
+  }
+  next();
+});
+
+UserSchema.methods.matchPassword = async function (enteredPassword: string): Promise<boolean> {
+  if (!this.passHash) {
+    return false;
+  }
+  return await bcrypt.compare(enteredPassword, this.passHash);
+};
 
 export default mongoose.model<IUser>('User', UserSchema);

@@ -67,18 +67,18 @@ export const authApi = {
     return data;
   },
 
-  verifyEmail: async (token: string) => {
-    const { data } = await api.post<ApiResponse>('/auth/verify-email', { token });
+  verifyEmail: async (payload: { email: string; token: string }) => {
+    const { data } = await api.post<ApiResponse>('/auth/verify-email', payload);
     return data;
   },
 
-  resendVerification: async (email: string) => {
-    const { data } = await api.post<ApiResponse>('/auth/resend-verification', { email });
+  resendVerification: async (payload: { email: string }) => {
+    const { data } = await api.post<ApiResponse>('/auth/resend-verification', payload);
     return data;
   },
 
-  forgotPassword: async (email: string) => {
-    const { data } = await api.post<ApiResponse>('/auth/forgot-password', { email });
+  forgotPassword: async (payload: { email: string }) => {
+    const { data } = await api.post<ApiResponse>('/auth/forgot-password', payload);
     return data;
   },
 
