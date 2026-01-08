@@ -156,11 +156,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             handleSetToken(data.token);
             
             setCurrentUser({
-                _id: data.user._id || data.user.id,
-                name: data.user.name,
-                email: data.user.email,
-                avatar: data.user.avatar,
-                isVerified: data.user.isVerified,
+                _id: data._id || data.id, 
+                name: data.name,
+                email: data.email,
+                avatar: data.avatar,
+                isVerified: data.isVerified,
             });
         } catch (error: any) {
             addNotification(error.message || 'Login failed.');
@@ -183,11 +183,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         handleSetToken(data.token);
 
         setCurrentUser({
-            _id: data.user?._id || data.user.id,
-            name: data.user?.name,
-            email: data.user?.email,
-            avatar: data.user?.avatar,
-            isVerified: data.user?.isVerified,
+            _id: data._id || data.id,
+            name: data.name,
+            email: data.email,
+            avatar: data.avatar,
+            isVerified: data.isVerified,
         });
         addNotification(`Logged in with ${providerName}!`, 'success');
     };
@@ -220,10 +220,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }
 
             setCurrentUser({
-                _id: responseData.user?._id || responseData.user.id,
-                name: responseData.user?.name,
-                email: responseData.user?.email,
-                avatar: responseData.user?.avatar,
+                _id: responseData._id || responseData.id,
+                name: responseData.name,
+                email: responseData.email,
+                avatar: responseData.avatar,
                 isVerified: true,
             });
             addNotification('Email verified successfully! Logging you in...', 'success');

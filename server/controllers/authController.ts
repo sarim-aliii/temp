@@ -7,6 +7,7 @@ import User from '../models/User';
 import { firebaseAdmin } from '../config/firebaseAdmin';
 import { sendEmail } from '../utils/emailService';
 
+
 // Helper: Generate JWT
 const generateToken = (id: string) => {
   return jwt.sign({ id }, process.env.JWT_SECRET!, {
@@ -26,12 +27,10 @@ export const registerUser = asyncHandler(async (req: Request, res: Response) => 
     if (user.isVerified) {
       throw new AppError('An account with this email already exists.', 400);
     }
-    // User exists but is NOT verified. We update them and resend code.
-    // Update password and name in case the user wants to change them
+
     user.password = password;
     user.name = name || user.name;
   } else {
-    // Create new user instance (but don't save yet)
     user = new User({
       email,
       password,
@@ -82,11 +81,10 @@ export const registerUser = asyncHandler(async (req: Request, res: Response) => 
     });
   } catch (emailError) {
     console.error("Email send failed:", emailError);
-    // If it was a new user, we might want to delete them or just throw error
-    // Since we handle "stuck" users now, it's safe to just throw error
     throw new AppError('User registered, but failed to send verification email.', 500);
   }
 });
+
 
 // @desc    Auth user & get token
 // @route   POST /api/auth/login

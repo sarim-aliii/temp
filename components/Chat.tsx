@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { CURRENT_USER } from '../constants';
 import { Message, User } from '../types';
 import { Send, Sparkles, Mic, MicOff, Video as VideoIcon, VideoOff, PhoneOff, ShieldCheck, Image as ImageIcon } from 'lucide-react';
 import { refineMessage } from '../services/geminiService';
 import { getSocket } from '../services/socket';
+import { useAppContext } from '../context/AppContext';
+
 
 interface ChatProps {
     recipient: User;
     messages: Message[];
     onSendMessage: (text: string) => void;
+    partnerSocketId: string | null;
 }
 
 const RTC_CONFIG = {
@@ -18,7 +20,8 @@ const RTC_CONFIG = {
   ]
 };
 
-export const Chat: React.FC<ChatProps> = ({ recipient, messages, onSendMessage }) => {
+export const Chat: React.FC<ChatProps> = ({ recipient, messages, onSendMessage, partnerSocketId }) => {
+  const { currentUser } = useAppContext();
   const [inputText, setInputText] = useState('');
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   
@@ -26,7 +29,6 @@ export const Chat: React.FC<ChatProps> = ({ recipient, messages, onSendMessage }
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [partnerStream, setPartnerStream] = useState<MediaStream | null>(null);
   const [isCallActive, setIsCallActive] = useState(false);
-  const [partnerSocketId, setPartnerSocketId] = useState<string | null>(null);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
 
@@ -34,6 +36,8 @@ export const Chat: React.FC<ChatProps> = ({ recipient, messages, onSendMessage }
   const myVideo = useRef<HTMLVideoElement>(null);
   const partnerVideo = useRef<HTMLVideoElement>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
+
+  const pendingCandidates = useRef<RTCIceCandidateInit[]>([]);
 
   const socket = getSocket();
 
@@ -49,44 +53,43 @@ export const Chat: React.FC<ChatProps> = ({ recipient, messages, onSendMessage }
   useEffect(() => {
     if (!socket) return;
 
-    // 1. Get Partner ID on Join
-    socket.on('room-joined', (data: any) => {
-      if (data.partnerSocketId) {
-        console.log("Partner found immediately:", data.partnerSocketId);
-        setPartnerSocketId(data.partnerSocketId);
-      }
-    });
-
-    // 2. Handle Partner Joining Later
-    socket.on('partner-online', (id: string) => {
-      console.log("Partner came online:", id);
-      setPartnerSocketId(id);
-    });
-
-    socket.on('partner-offline', () => {
-        console.log("Partner left");
-        endCall();
-        setPartnerSocketId(null);
-    });
-
-    // 3. WebRTC Signaling Handling
-    socket.on('p2pSignal', async (payload: { sender: string, data: any }) => {
+    const handleSignal = async (payload: { sender: string, data: any }) => {
         const { data, sender } = payload;
         
         if (!peerRef.current) {
-             // If we receive an offer but don't have a peer, we are the receiver
+             // Case 1: We receive an Offer (we are the receiver)
              if (data.type === 'offer') {
                  console.log("Received Offer from", sender);
-                 await initializePeer(sender); // No 'initiator' flag needed for receiver logic in this simplified flow
-                 if (peerRef.current) {
-                     await peerRef.current.setRemoteDescription(new RTCSessionDescription(data));
-                     const answer = await peerRef.current.createAnswer();
-                     await peerRef.current.setLocalDescription(answer);
+                 
+                 // Initialize Peer (camera, tracks, etc)
+                 const peer = await initializePeer(sender); 
+                 
+                 if (peer) {
+                     // 1. Process the Offer
+                     await peer.setRemoteDescription(new RTCSessionDescription(data));
+                     
+                     // 2. Process any Queued Candidates that arrived while we were initializing
+                     if (pendingCandidates.current.length > 0) {
+                        console.log(`Processing ${pendingCandidates.current.length} queued candidates`);
+                        for (const candidate of pendingCandidates.current) {
+                            await peer.addIceCandidate(new RTCIceCandidate(candidate));
+                        }
+                        pendingCandidates.current = []; // Clear queue
+                     }
+
+                     // 3. Send Answer
+                     const answer = await peer.createAnswer();
+                     await peer.setLocalDescription(answer);
                      socket.emit('p2pSignal', { target: sender, data: answer });
                  }
+             } 
+             // Case 2: We receive a Candidate BEFORE the Offer is processed
+             else if (data.candidate) {
+                 console.log("Queueing early candidate");
+                 pendingCandidates.current.push(data.candidate);
              }
         } else {
-            // We already have a peer setup
+            // Peer is already active
             if (data.type === 'answer') {
                  console.log("Received Answer");
                  await peerRef.current.setRemoteDescription(new RTCSessionDescription(data));
@@ -95,40 +98,33 @@ export const Chat: React.FC<ChatProps> = ({ recipient, messages, onSendMessage }
                  await peerRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
             }
         }
-    });
+    };
+
+    socket.on('p2pSignal', handleSignal);
 
     return () => {
-      socket.off('room-joined');
-      socket.off('partner-online');
-      socket.off('partner-offline');
-      socket.off('p2pSignal');
+      socket.off('p2pSignal', handleSignal);
       endCall();
     };
   }, []);
 
-  // Initialize Media and Peer Connection
   const initializePeer = async (targetId: string) => {
       try {
-          // 1. Get User Media
           const currentStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
           setStream(currentStream);
           if (myVideo.current) myVideo.current.srcObject = currentStream;
 
-          // 2. Create Peer Connection
           const peer = new RTCPeerConnection(RTC_CONFIG);
           peerRef.current = peer;
 
-          // 3. Add Tracks
           currentStream.getTracks().forEach(track => peer.addTrack(track, currentStream));
 
-          // 4. Handle ICE Candidates
           peer.onicecandidate = (event) => {
               if (event.candidate && socket) {
                   socket.emit('p2pSignal', { target: targetId, data: { candidate: event.candidate } });
               }
           };
 
-          // 5. Handle Incoming Stream
           peer.ontrack = (event) => {
               console.log("Received Remote Stream");
               setPartnerStream(event.streams[0]);
@@ -136,12 +132,11 @@ export const Chat: React.FC<ChatProps> = ({ recipient, messages, onSendMessage }
           };
 
           setIsCallActive(true);
-
           return peer;
-
       } catch (err) {
           console.error("Failed to access media devices:", err);
           alert("Could not access camera/microphone.");
+          return null;
       }
   };
 
@@ -153,7 +148,6 @@ export const Chat: React.FC<ChatProps> = ({ recipient, messages, onSendMessage }
       
       const peer = await initializePeer(partnerSocketId);
       if (peer && socket) {
-          // Create Offer
           const offer = await peer.createOffer();
           await peer.setLocalDescription(offer);
           socket.emit('p2pSignal', { target: partnerSocketId, data: offer });
@@ -171,6 +165,7 @@ export const Chat: React.FC<ChatProps> = ({ recipient, messages, onSendMessage }
       }
       setPartnerStream(null);
       setIsCallActive(false);
+      pendingCandidates.current = []; // Clear queue on end
   };
 
   const toggleVideo = () => {
@@ -289,7 +284,7 @@ export const Chat: React.FC<ChatProps> = ({ recipient, messages, onSendMessage }
             </div>
         )}
         {messages.map((msg) => {
-          const isMe = msg.senderId === CURRENT_USER.id;
+          const isMe = msg.senderId === (currentUser?._id || currentUser?.id);
           return (
             <div key={msg.id} className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[80%] md:max-w-[60%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
