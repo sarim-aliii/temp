@@ -85,7 +85,7 @@ const getDefaultRoomState = (): RoomState => ({
 
 // --- Global State Broadcaster (Master Clock Sync) ---
 const SYNC_INTERVAL = 1500;
-const FREE_TRIAL_LIMIT = 10 * 60 * 1000;
+const FREE_TRIAL_LIMIT = 24 * 60 * 60 * 1000;
 setInterval(() => {
   const now = Date.now();
   for (const roomId in roomState) {
@@ -111,25 +111,25 @@ setInterval(() => {
     }
 
     // Weakest Link Rule (Pause)
-    const socketsInRoom = io.sockets.adapter.rooms.get(roomId);
-    let isAnyoneBuffering = false;
-    if (socketsInRoom) {
-      for (const socketId of socketsInRoom) {
-        const sock = io.sockets.sockets.get(socketId) as unknown as AuthenticatedSocket;
-        if (sock && sock.isBuffering) {
-          isAnyoneBuffering = true;
-          break;
-        }
-      }
-    }
+    // const socketsInRoom = io.sockets.adapter.rooms.get(roomId);
+    // let isAnyoneBuffering = false;
+    // if (socketsInRoom) {
+    //   for (const socketId of socketsInRoom) {
+    //     const sock = io.sockets.sockets.get(socketId) as unknown as AuthenticatedSocket;
+    //     if (sock && sock.isBuffering) {
+    //       isAnyoneBuffering = true;
+    //       break;
+    //     }
+    //   }
+    // }
 
-    if (isAnyoneBuffering && state.playbackState.isPlaying) {
-      Logger.warn(`[Room: ${roomId}] Pausing playback because a user is buffering.`);
-      state.playbackState.isPlaying = false;
-      state.playbackState.lastUpdateTimestamp = Date.now();
-      io.to(roomId).emit('serverUpdateState', state);
-      continue; 
-    }
+    // if (isAnyoneBuffering && state.playbackState.isPlaying) {
+    //   Logger.warn(`[Room: ${roomId}] Pausing playback because a user is buffering.`);
+    //   state.playbackState.isPlaying = false;
+    //   state.playbackState.lastUpdateTimestamp = Date.now();
+    //   io.to(roomId).emit('serverUpdateState', state);
+    //   continue; 
+    // }
 
     // Advance clock if playing and no one is buffering
     if (state.playbackState.isPlaying) {
@@ -290,7 +290,7 @@ io.on('connection', (socket: Socket) => {
         currentState.videoSource = action.payload;
         currentState.playbackState = {
           ...getDefaultRoomState().playbackState,
-          isPlaying: true, 
+          isPlaying: false, 
           lastUpdateTimestamp: serverTime,
         };
         currentState.isScreenSharing = action.payload.type === 'screen';

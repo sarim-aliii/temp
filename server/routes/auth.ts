@@ -9,7 +9,8 @@ import {
   getUserProfile, 
   resendVerificationEmail,
   forgotPassword,
-  resetPassword 
+  resetPassword,
+  googleLogin
 } from '../controllers/authController';
 
 const router = Router();
@@ -22,7 +23,7 @@ router.post('/verify-email', verifyEmail);
 router.post('/resend-verification', resendVerificationEmail);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
-
+router.post('/google', googleLogin);
 router.get('/me', authMiddleware, getUserProfile);
 router.get('/google', passport.authenticate('google', {
   scope: ['profile', 'email'],

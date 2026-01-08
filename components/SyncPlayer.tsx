@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import ReactPlayer from 'react-player';
 import { getSocket } from '../services/socket';
-import { Play, Pause, Link as LinkIcon } from 'lucide-react';
-
+import { Play, Pause, Link as LinkIcon, Volume2, VolumeX } from 'lucide-react';
 
 interface SyncPlayerProps {
     isPaired: boolean;
@@ -13,69 +12,70 @@ export const SyncPlayer: React.FC<SyncPlayerProps> = ({ isPaired }) => {
     const VideoPlayer = ReactPlayer as any;
     const playerRef = useRef<any>(null);
     
-    // Local State
+    // --- STATE ---
     const [url, setUrl] = useState('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
     const [playing, setPlaying] = useState(false);
+    const [muted, setMuted] = useState(true); 
     const [volume, setVolume] = useState(0.8);
-    const [isBuffering, setIsBuffering] = useState(false);
-    const isRemoteUpdate = useRef(false);
+    
+    // TIMERS
+    const lastInteractionTime = useRef(0); 
 
+    // --- SOCKET SYNC ---
     useEffect(() => {
         if (!socket || !isPaired) return;
 
         const handleServerState = (state: any) => {
             if (!state || !state.playbackState) return;
-
             const { videoSource, playbackState } = state;
 
-            // 1. Sync URL from partner
+            // 1. Sync URL
             if (videoSource?.src && videoSource.src !== url) {
-                console.log("Syncing URL:", videoSource.src);
                 setUrl(videoSource.src);
             }
+
+            // IGNORE SERVER: If we interacted recently (< 2s), ignore server updates
+            const timeSinceInteraction = Date.now() - lastInteractionTime.current;
+            if (timeSinceInteraction < 2000) return;
 
             // 2. Sync Play/Pause
             if (playbackState.isPlaying !== playing) {
                 setPlaying(playbackState.isPlaying);
             }
 
-            // 3. Sync Time (Prevent drift)
-            if (playerRef.current) {
-                // Safe access to getCurrentTime with fallback
-                const currentTime = playerRef.current.getCurrentTime ? playerRef.current.getCurrentTime() : 0;
-                const serverTime = playbackState.currentTime;
-                
-                const timeSinceUpdate = (Date.now() - playbackState.lastUpdateTimestamp) / 1000;
-                const adjustedServerTime = serverTime + (playbackState.isPlaying ? timeSinceUpdate : 0);
+            // 3. Sync Time (Safe Mode)
+            if (playbackState.isPlaying && playerRef.current) {
+                try {
+                    // Check if function exists to prevent crash
+                    if (typeof playerRef.current.getCurrentTime !== 'function' || 
+                        typeof playerRef.current.seekTo !== 'function') return;
 
-                // Only seek if we are off by more than 1 second (prevents stutter)
-                if (Math.abs(currentTime - adjustedServerTime) > 1.0) {
-                    isRemoteUpdate.current = true; 
-                    playerRef.current.seekTo(adjustedServerTime, 'seconds');
+                    const currentTime = playerRef.current.getCurrentTime();
+                    const serverTime = playbackState.currentTime;
+                    const timeSinceUpdate = (Date.now() - playbackState.lastUpdateTimestamp) / 1000;
+                    const adjustedServerTime = serverTime + timeSinceUpdate;
+
+                    if (Math.abs(currentTime - adjustedServerTime) > 1.5) {
+                        playerRef.current.seekTo(adjustedServerTime, 'seconds');
+                    }
+                } catch (err) {
+                    // Ignore seek errors
                 }
             }
         };
 
         socket.on('serverUpdateState', handleServerState);
-        socket.on('room-joined', (data: any) => {
-            if(data.initialState) handleServerState(data.initialState);
-        });
-
-        return () => {
-            socket?.off('serverUpdateState');
-            socket?.off('room-joined');
-        };
+        return () => { socket?.off('serverUpdateState'); };
     }, [socket, isPaired, url, playing]);
 
-
-    // --- User Interaction Handlers ---
-
+    // --- HANDLERS ---
     const handlePlay = () => {
-        setPlaying(true); 
+        lastInteractionTime.current = Date.now();
+        setPlaying(true); // User controls state directly
+        
         if (isPaired) {
-            const currentTime = playerRef.current?.getCurrentTime ? playerRef.current.getCurrentTime() : 0;
-            
-            socket?.emit('clientAction', {
+             const currentTime = playerRef.current?.getCurrentTime ? playerRef.current.getCurrentTime() : 0;
+             socket?.emit('clientAction', {
                 type: 'UPDATE_PLAYBACK_STATE',
                 payload: { isPlaying: true, currentTime }
             });
@@ -83,42 +83,25 @@ export const SyncPlayer: React.FC<SyncPlayerProps> = ({ isPaired }) => {
     };
 
     const handlePause = () => {
-        setPlaying(false);
+        lastInteractionTime.current = Date.now();
+        setPlaying(false); // User controls state directly
+        
         if (isPaired) {
-            const currentTime = playerRef.current?.getCurrentTime ? playerRef.current.getCurrentTime() : 0;
-
-            socket?.emit('clientAction', {
+             const currentTime = playerRef.current?.getCurrentTime ? playerRef.current.getCurrentTime() : 0;
+             socket?.emit('clientAction', {
                 type: 'UPDATE_PLAYBACK_STATE',
                 payload: { isPlaying: false, currentTime }
             });
         }
     };
 
-    const handleProgress = (state: any) => {
-        // We don't emit continuously to save bandwidth
-    };
-
-    const handleSeek = (seconds: number) => {
-        if (isRemoteUpdate.current) {
-            isRemoteUpdate.current = false;
-            return;
-        }
-
-        if (isPaired) {
-            socket?.emit('clientAction', {
-                type: 'UPDATE_PLAYBACK_TIME',
-                payload: { currentTime: seconds }
-            });
-        }
-    };
-    
     const handleUrlChange = (e: React.FormEvent) => {
         e.preventDefault();
-        const newUrl = prompt("Enter YouTube/Video URL:");
+        const newUrl = prompt("Enter YouTube URL:");
         if (newUrl) {
+            lastInteractionTime.current = Date.now();
             setUrl(newUrl);
-            setPlaying(true); 
-
+            setPlaying(true);
             if (isPaired) {
                 socket?.emit('clientAction', {
                     type: 'UPDATE_VIDEO_SOURCE',
@@ -138,37 +121,34 @@ export const SyncPlayer: React.FC<SyncPlayerProps> = ({ isPaired }) => {
                     height="100%"
                     playing={playing}
                     volume={volume}
-                    controls={true}
-                    onPlay={handlePlay}
-                    onPause={handlePause}
-                    onSeek={handleSeek}
-                    onProgress={handleProgress}
-                    onBuffer={() => setIsBuffering(true)}
-                    onBufferEnd={() => setIsBuffering(false)}
+                    muted={muted}              
+                    controls={true}  
+                    
+                    // --- CRITICAL FIX: DETACH EVENT LISTENERS ---
+                    // We REMOVED onPlay and onPause. 
+                    // This breaks the "Feedback Loop" causing the AbortError.
+                    onError={(e: any) => console.error("Player Error:", e)}
+                    
                     style={{ pointerEvents: 'auto' }}
                 />
-                
-                {/* Sync Indicator Overlay */}
-                <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-full flex items-center gap-2 pointer-events-none">
-                    <div className={`w-2 h-2 rounded-full ${isPaired ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-                    <span className="text-[10px] font-mono uppercase tracking-widest text-white/80">
-                        {isPaired ? 'Live Sync' : 'Offline'}
-                    </span>
-                </div>
             </div>
 
-            {/* Controls Bar */}
+            {/* CONTROLS */}
             <div className="p-4 flex items-center justify-between bg-zinc-950">
                 <div className="flex items-center gap-4">
-                     <button onClick={() => setPlaying(!playing)} className="text-white hover:text-nothing-red transition-colors">
-                        {playing ? <Pause size={20} /> : <Play size={20} />}
+                     <button onClick={() => playing ? handlePause() : handlePlay()} className="text-white hover:text-red-500">
+                        {playing ? <Pause /> : <Play />}
+                     </button>
+                     
+                     <button onClick={() => setMuted(!muted)} className="text-white hover:text-blue-400">
+                        {muted ? <VolumeX /> : <Volume2 />}
                      </button>
                      <div className="text-xs font-mono text-zinc-500 truncate max-w-[200px]">{url}</div>
                 </div>
                 
                 <button 
                     onClick={handleUrlChange}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs font-mono transition-colors"
+                    className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs font-mono"
                 >
                     <LinkIcon size={14} /> Change Video
                 </button>
