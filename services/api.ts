@@ -121,4 +121,24 @@ export const pairingApi = {
   },
 };
 
+// --- Posts System ---
+export const postsApi = {
+  getAll: async () => {
+    const { data } = await api.get('/posts');
+    return data;
+  },
+  create: async (postData: { content: string; type?: string; image?: string }) => {
+    const { data } = await api.post('/posts', postData);
+    return data;
+  },
+  like: async (postId: string) => {
+    const { data } = await api.put(`/posts/${postId}/like`);
+    return data;
+  },
+  comment: async (postId: string, text: string) => {
+    const { data } = await api.post(`/posts/${postId}/comment`, { text });
+    return data;
+  }
+};
+
 export default api;
