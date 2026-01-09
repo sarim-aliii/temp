@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Reveal } from './Reveal';
-import { ArrowRight, Activity, Lock, Zap, Globe, Cpu } from 'lucide-react';
+import { ArrowRight, Activity, Lock, Zap, Globe, Cpu, X } from 'lucide-react';
+import WaitlistForm from './WaitlistForm'; 
 
 interface LandingProps {
   onEnter: () => void;
@@ -8,6 +9,7 @@ interface LandingProps {
 
 export const Landing: React.FC<LandingProps> = ({ onEnter }) => {
   const [scrolled, setScrolled] = useState(0);
+  const [showWaitlist, setShowWaitlist] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY);
@@ -18,6 +20,33 @@ export const Landing: React.FC<LandingProps> = ({ onEnter }) => {
   return (
     <div className="relative min-h-screen w-full flex flex-col items-center justify-start bg-black text-white selection:bg-nothing-red selection:text-white overflow-x-hidden">
       
+      {/* --- WAITLIST MODAL --- */}
+      {showWaitlist && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/80 backdrop-blur-md transition-opacity" 
+            onClick={() => setShowWaitlist(false)}
+          />
+          
+          {/* Modal Content */}
+          <div className="relative z-10 w-full max-w-md animate-in fade-in zoom-in duration-300">
+            {/* Close Button */}
+            <button 
+              onClick={() => setShowWaitlist(false)}
+              className="absolute -top-12 right-0 text-zinc-400 hover:text-white transition-colors"
+            >
+              <X size={24} />
+            </button>
+            
+            {/* The Form */}
+            <div className="overflow-hidden rounded-2xl shadow-2xl shadow-nothing-red/20">
+              <WaitlistForm />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 1. Global Noise Texture for "Raw" feel */}
       <div className="fixed inset-0 z-[1] opacity-[0.03] pointer-events-none mix-blend-overlay" 
            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}>
@@ -32,7 +61,7 @@ export const Landing: React.FC<LandingProps> = ({ onEnter }) => {
       {/* Dot Matrix Overlay */}
       <div className="fixed inset-0 dot-matrix opacity-[0.05] z-0 pointer-events-none" />
 
-      {/* Navbar Placeholder (Visual anchor) */}
+      {/* Navbar Placeholder */}
       <nav className="fixed top-0 w-full z-50 px-6 py-6 flex justify-between items-center mix-blend-difference">
         <span className="font-mono text-xs tracking-[0.2em] text-zinc-500">SYS.VER.2.0</span>
         <div className="flex gap-2">
@@ -64,6 +93,8 @@ export const Landing: React.FC<LandingProps> = ({ onEnter }) => {
 
         <Reveal delay={0.4}>
           <div className="mt-16 flex flex-col items-center gap-6">
+            
+             {/* Main Login Button */}
              <button 
               onClick={onEnter}
               className="group relative px-10 py-5 bg-white text-black rounded-full font-mono text-sm font-bold tracking-widest overflow-hidden transition-all hover:scale-105 active:scale-95 shadow-[0_0_40px_-10px_rgba(255,255,255,0.3)]"
@@ -77,6 +108,14 @@ export const Landing: React.FC<LandingProps> = ({ onEnter }) => {
                 <span>INITIALIZING</span>
                 <Activity size={16} className="animate-bounce" />
               </div>
+            </button>
+
+            {/* --- NEW WAITLIST TRIGGER BUTTON --- */}
+            <button 
+              onClick={() => setShowWaitlist(true)}
+              className="text-zinc-500 hover:text-white text-xs font-mono tracking-widest uppercase transition-colors border-b border-transparent hover:border-nothing-red pb-1"
+            >
+              Request Access // Join Waitlist
             </button>
             
             <div className="flex items-center gap-4 opacity-50 mt-4">

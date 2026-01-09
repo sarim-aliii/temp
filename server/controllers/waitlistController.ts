@@ -1,6 +1,10 @@
 import { Request, Response } from 'express';
 import Waitlist from '../models/Waitlist';
-import { sendEmail, getWaitlistConfirmationEmail } from '../utils/emailService';
+import { 
+  sendEmail, 
+  getWaitlistConfirmationEmail,
+  getAccessGrantedEmail
+} from '../utils/emailService';
 import Logger from '../utils/logger';
 
 
@@ -144,5 +148,62 @@ export const resetWaitlist = async (req: Request, res: Response) => {
   } catch (error) {
     Logger.error('Error resetting waitlist:', error);
     res.status(500).json({ success: false, message: 'Server error during reset' });
+  }
+};
+
+
+// @desc    Get all waitlist users
+// @route   GET /api/waitlist/all
+// @access  Private (Admin Only)
+export const getWaitlistUsers = async (req: Request, res: Response) => {
+  try {
+    const users = await Waitlist.find({}).sort({ position: 1 });
+    
+    res.status(200).json({
+      success: true,
+      count: users.length,
+      data: users
+    });
+  } catch (error) {
+    Logger.error('Error fetching waitlist users:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+
+// @desc    Approve a waitlist user
+// @route   PUT /api/waitlist/approve/:id
+// @access  Private (Admin Only)
+export const approveWaitlistUser = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    const entry = await Waitlist.findById(id);
+    if (!entry) {
+       res.status(404).json({ success: false, message: 'User not found' });
+       return;
+    }
+
+    if (entry.approved) {
+       res.status(400).json({ success: false, message: 'User already approved' });
+       return;
+    }
+
+    // Update status
+    entry.approved = true;
+    await entry.save();
+
+    Logger.info(`Waitlist user approved: ${entry.email}`);
+
+    // Send "Access Granted" Email
+    sendEmail(getAccessGrantedEmail(entry.email))
+      .then(() => Logger.info(`Access email sent to ${entry.email}`))
+      .catch(err => Logger.error(`Failed to send access email to ${entry.email}`, err));
+
+    res.status(200).json({ success: true, message: 'User approved and notified', data: entry });
+
+  } catch (error) {
+    Logger.error('Error approving user:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };

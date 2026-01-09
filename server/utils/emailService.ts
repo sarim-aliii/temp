@@ -87,3 +87,23 @@ export const sendEmail = async (options: EmailOptions): Promise<boolean> => {
     return false;
   }
 };
+
+export const getAccessGrantedEmail = (email: string): EmailOptions => {
+  return {
+    to: email,
+    subject: "Access Granted: Welcome to BlurChat",
+    html: `
+      <div style="font-family: monospace; background: #000; color: #fff; padding: 40px;">
+        <h1 style="color: #ef4444; letter-spacing: 0.2em;">SYSTEM_ACCESS: GRANTED</h1>
+        <p>Terminal ID: ${email}</p>
+        <hr style="border: 1px solid #333; margin: 20px 0;" />
+        <p>Your spot in the queue has cleared. You are now authorized to enter the system.</p>
+        
+        <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/login" 
+           style="display: inline-block; background: #fff; color: #000; padding: 15px 30px; text-decoration: none; font-weight: bold; margin-top: 20px;">
+           ENTER_SYSTEM ->
+        </a>
+      </div>
+    `
+  };
+};

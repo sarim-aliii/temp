@@ -3,7 +3,9 @@ import {
   registerWaitlist, 
   getWaitlistPosition, 
   getWaitlistStats, 
-  resetWaitlist 
+  getWaitlistUsers,
+  approveWaitlistUser,
+  resetWaitlist,
 } from '../controllers/waitlistController';
 import { requireAdmin } from '../middleware/adminMiddleware';
 
@@ -13,5 +15,7 @@ router.post('/register', registerWaitlist);
 router.get('/position/:email', getWaitlistPosition);
 router.get('/stats', getWaitlistStats);
 router.delete('/reset', requireAdmin, resetWaitlist);
+router.get('/all', requireAdmin, getWaitlistUsers);
+router.put('/approve/:id', requireAdmin, approveWaitlistUser);
 
 export default router;

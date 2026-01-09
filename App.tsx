@@ -5,7 +5,7 @@ import { AuthManager } from './components/auth/AuthManager';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { Landing } from './components/Landing';
 import { Dashboard } from './components/Dashboard';
-
+import AdminWaitlist from './components/admin/AdminWaitlist';
 
 
 // Helper to redirect if already logged in
@@ -21,6 +21,8 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Landing onEnter={() => window.location.href = '/login'} />} />
+
+      <Route path="/admin/waitlist" element={<AdminWaitlist />} />
 
       <Route path="/login" element={
         <PublicRoute>

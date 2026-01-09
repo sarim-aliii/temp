@@ -5,6 +5,7 @@ export interface IWaitlist extends Document {
   email: string;
   position: number;
   notified: boolean;
+  approved: boolean;
   notifiedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -26,6 +27,10 @@ const WaitlistSchema: Schema = new Schema(
     notified: {
       type: Boolean,
       default: false,
+    },
+    approved: { 
+      type: Boolean, 
+      default: false 
     },
     notifiedAt: {
       type: Date,
