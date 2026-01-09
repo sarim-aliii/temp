@@ -7,6 +7,7 @@ import { Loader } from '../ui/Loader';
 import { authApi } from '../../services/api'; 
 import { ShieldCheck, Radio, RefreshCcw, Wifi, AlertTriangle } from 'lucide-react';
 
+
 interface VerifyEmailPageProps {
   email?: string;
   onSuccess?: () => void;
@@ -60,8 +61,8 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({ email: propEma
         setSuccessMsg('IDENTITY_CONFIRMED. INITIALIZING UPLINK...');
         localStorage.removeItem('pendingVerificationEmail');
 
-        if (response.token) {
-            localStorage.setItem('token', response.token);
+        if (response.data?.token) {
+            localStorage.setItem('token', response.data.token);
         }
 
         if (onSuccess) {
@@ -99,7 +100,7 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({ email: propEma
       return (
         <div className="h-screen w-full flex flex-col items-center justify-center bg-black text-white font-mono gap-4">
             <div className="text-red-500 animate-pulse">NO IDENTITY FOUND</div>
-            <Button onClick={() => navigate('/signup')} variant="outline" className="border-white/20 text-white">
+            <Button onClick={() => navigate('/signup')} variant="secondary" className="border-white/20 text-white">
                 RETURN TO INITIALIZATION
             </Button>
         </div>
@@ -146,12 +147,9 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({ email: propEma
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-6">
-                        {/* OTP Input */}
                         <div className="flex justify-center w-full py-2">
                             <OtpInput 
                                 length={6} 
-                                value={token} // Pass controlled value
-                                onChange={setToken} // Allow manual typing updates
                                 onComplete={(code) => {
                                     setToken(code);
                                     handleVerification(code);
@@ -159,7 +157,6 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({ email: propEma
                             />
                         </div>
 
-                        {/* Status Messages */}
                         {verifyError && (
                             <div className="p-3 bg-red-950/50 border border-red-500/30 rounded flex items-center gap-3 animate-in fade-in slide-in-from-top-1">
                                 <AlertTriangle size={14} className="text-red-500 shrink-0" />
@@ -173,7 +170,6 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({ email: propEma
                             </div>
                         )}
 
-                        {/* Verify Button */}
                         <Button 
                             type="submit" 
                             disabled={isLoading || token.length < 6} 
@@ -188,7 +184,6 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({ email: propEma
                         </Button>
                     </form>
 
-                    {/* Resend Logic */}
                     <div className="mt-6 pt-4 border-t border-white/5 text-center">
                           {timer > 0 ? (
                            <div className="flex justify-center items-center gap-2 text-zinc-500 font-mono text-[10px]">

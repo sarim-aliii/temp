@@ -7,6 +7,7 @@ import { Loader } from '../ui/Loader';
 import { SocialButton } from '../ui/SocialButton';
 import { UserPlus, Cpu, AlertCircle, ArrowLeft, ScanFace } from 'lucide-react';
 
+
 interface SignUpPageProps {
   onSwitchToLogin: () => void;
   onSignUpSuccess: (email: string) => void;
@@ -17,8 +18,6 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({ onSwitchToLogin, onSignU
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  
-  // Local validation errors
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
 
   const { 
@@ -53,10 +52,7 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({ onSwitchToLogin, onSignU
     
     try {
       await createAccount({ email, password });
-      
-      // --- FIX: Save email to localStorage for persistence ---
       localStorage.setItem('pendingVerificationEmail', email);
-      
       onSignUpSuccess(email);
     } catch (e) {
       // Error handled by hook

@@ -26,8 +26,8 @@ export const useApi = <T, P extends any[]>(
     } catch (err) {
       const message = getErrorMessage(err);
       setError(message);
-      toast.error(message); // Automatically show the toast
-      throw err; // Re-throw so the component can still react if needed
+      toast.error(message);
+      throw err;
     } finally {
       setLoading(false);
     }

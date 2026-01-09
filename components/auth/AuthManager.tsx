@@ -6,6 +6,7 @@ import { VerifyEmailPage } from './VerifyEmailPage';
 import { ResetPasswordPage } from './ResetPasswordPage';
 import { ArrowLeft, ShieldAlert } from 'lucide-react';
 
+
 type AuthView = 'login' | 'signup' | 'forgot-password' | 'verify-email' | 'reset-password';
 
 
@@ -108,7 +109,7 @@ export const AuthManager: React.FC = () => {
         case 'verify-email':
             return (
                 <AuthLayout title="Verification Required">
-                    <VerifyEmailPage email={userEmail} onSuccess={() => { /* Handled by AppContext */ }} />
+                    <VerifyEmailPage email={userEmail} onSuccess={() => { }} />
                 </AuthLayout>
             );
         

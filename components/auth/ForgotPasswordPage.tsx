@@ -7,6 +7,7 @@ import { useApi } from '../../hooks/useApi';
 import { authApi } from '../../services/api'; 
 import { KeyRound, Mail, ArrowLeft, ShieldAlert, CheckCircle2, AlertCircle, Signal } from 'lucide-react';
 
+
 interface ForgotPasswordPageProps {
   onSuccess: (email: string) => void;
   onSwitchToLogin: () => void;
@@ -14,7 +15,6 @@ interface ForgotPasswordPageProps {
 }
 
 export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({ onSuccess, onSwitchToLogin, onSwitchToSignUp }) => {
-  // STEPS: 1 = Email, 2 = OTP + New Password
   const [step, setStep] = useState<1 | 2>(1);
   
   // Form State
@@ -37,7 +37,6 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({ onSucces
     loading: isResetting 
   } = useApi(authApi.resetPassword);
 
-  // --- STEP 1: SEND CODE ---
   const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
     setCustomError('');
@@ -49,7 +48,7 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({ onSucces
     }
 
     try {
-      await sendCode(email);
+      await sendCode({ email });
       setStep(2); 
       setSuccessMessage(`SIGNAL_SENT: ${email}`);
     } 
@@ -64,12 +63,10 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({ onSucces
     } 
   };
 
-  // --- STEP 2: RESET PASSWORD ---
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setCustomError('');
 
-    // Validation
     if (otp.length !== 6) {
         setCustomError("ERR_INVALID_TOKEN: LENGTH_MISMATCH");
         return;
@@ -159,7 +156,6 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({ onSucces
 
                 {/* FORM AREA */}
                 {step === 1 ? (
-                   /* --- STEP 1 FORM --- */
                    <form onSubmit={handleSendCode} className="space-y-6">
                        <div className="space-y-2">
                            <p className="text-xs text-zinc-500 font-mono leading-relaxed">
@@ -190,7 +186,6 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({ onSucces
                        </Button>
                    </form>
                 ) : (
-                   /* --- STEP 2 FORM --- */
                    <form onSubmit={handleResetPassword} className="space-y-5">
                        <div className="text-center space-y-3">
                            <label className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest block">Input Verification Token</label>

@@ -9,6 +9,7 @@ import connectDB from './db';
 import Logger from './utils/logger';
 import { initSocketServer } from './sockets';
 
+
 // Routes
 import authRoutes from './routes/auth';
 import pairingRoutes from './routes/pairing';
@@ -34,6 +35,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
 configurePassport(passport);
+
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err instanceof SyntaxError && 'body' in err) {
+    console.error('❌ Malformed JSON received:', err.message);
+    return res.status(400).json({ success: false, message: 'Invalid JSON payload received' });
+  }
+  next();
+});
 
 // --- HTTP Server & Socket.IO Setup ---
 const httpServer = createServer(app);

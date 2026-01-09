@@ -4,7 +4,6 @@ interface CardProps {
   children: React.ReactNode;
   className?: string;
   title?: string;
-  // Optional: Add a 'variant' if you want different levels of intensity later
 }
 
 export const Card: React.FC<CardProps> = ({ children, className = '', title }) => {
@@ -38,8 +37,7 @@ export const Card: React.FC<CardProps> = ({ children, className = '', title }) =
             <div className="relative z-10">
                 {children}
             </div>
-
-            {/* Optional: Scanline texture overlay for the card specifically */}
+            
             <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.02] pointer-events-none rounded-lg mix-blend-overlay"></div>
         </div>
     </div>

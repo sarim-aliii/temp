@@ -1,5 +1,6 @@
 import React from 'react';
 
+
 export const Loader: React.FC<{ spinnerClassName?: string }> = ({ spinnerClassName = 'w-16 h-16' }) => {
   return (
     <div className="flex justify-center items-center" role="status" aria-label="System Processing...">
@@ -19,7 +20,7 @@ export const Loader: React.FC<{ spinnerClassName?: string }> = ({ spinnerClassNa
                     cx="50" cy="50" r="45"
                     fill="none"
                     strokeWidth="4"
-                    strokeLinecap="square" // "Raw" square ends
+                    strokeLinecap="square"
                     strokeDasharray="100 200"
                 />
 

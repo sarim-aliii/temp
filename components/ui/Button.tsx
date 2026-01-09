@@ -1,5 +1,6 @@
 import React from 'react';
-import { Loader } from './Loader'; // Assuming you want to utilize the Loader here if needed, or keep passing it as children
+import { Loader } from './Loader';
+
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   children: React.ReactNode;
@@ -37,7 +38,6 @@ export const Button: React.FC<ButtonProps> = ({
       disabled={isLoading || disabled}
       {...props}
     >
-      {/* Optional: Add a subtle shine effect for primary buttons on hover */}
       {variant === 'primary' && (
         <div className="absolute inset-0 -translate-x-full group-hover:animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent z-0 pointer-events-none" />
       )}
@@ -46,7 +46,6 @@ export const Button: React.FC<ButtonProps> = ({
         <>
            <span className="opacity-0">{children}</span>
            <div className="absolute inset-0 flex items-center justify-center">
-              {/* You can replace this with your existing Loader component */}
                <Loader spinnerClassName={`w-4 h-4 ${variant === 'primary' ? 'text-black' : 'text-current'}`} />
            </div>
         </>

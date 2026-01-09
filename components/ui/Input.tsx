@@ -1,5 +1,6 @@
 import React from 'react';
 
+
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label: string;
   error?: string;
@@ -30,7 +31,6 @@ export const Input: React.FC<InputProps> = ({ label, error, id, className = '', 
           {...props}
         />
         
-        {/* Optional decorative corner accent when focused */}
         <div className={`absolute bottom-0 right-0 w-2 h-2 border-b border-r transition-all duration-300 pointer-events-none ${error ? 'border-red-500 opacity-100' : 'border-white opacity-0 group-focus-within:opacity-100'}`} />
       </div>
 

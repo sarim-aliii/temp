@@ -3,6 +3,7 @@ import { useAppContext } from '../../context/AppContext';
 import { Loader } from '../ui/Loader'; 
 import { ShieldCheck } from 'lucide-react';
 
+
 const ProtectedRoute = () => {
   const { currentUser, loading } = useAppContext();
   const location = useLocation();

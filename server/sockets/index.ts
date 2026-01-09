@@ -8,6 +8,7 @@ import { getRoomId } from '../utils/roomUtils';
 import { roomState, roomTimers, getDefaultRoomState } from '../state/roomStore';
 import { handleClientAction } from './actionHandler';
 
+
 // --- Constants ---
 const SYNC_INTERVAL = 1500;
 const FREE_TRIAL_LIMIT = 24 * 60 * 60 * 1000;
@@ -84,7 +85,6 @@ export const initSocketServer = (io: Server) => {
     // Initialize Room if needed
     if (!roomState[roomId]) {
       roomState[roomId] = getDefaultRoomState();
-      // Load journal entries & premium status
       try {
         const partner = await User.findById(user.pairedWithUserId);
         const isPremium = user.isPremium || partner?.isPremium || false;
@@ -130,7 +130,6 @@ export const initSocketServer = (io: Server) => {
       authSocket.isBuffering = isBuffering;
       socket.to(roomId).emit('partnerBuffering', isBuffering);
       
-      // Resume if everyone ready (Simple logic)
       if (!isBuffering && !roomState[roomId].playbackState.isPlaying) {
          // Logic to resume if partner is also ready could go here
       }

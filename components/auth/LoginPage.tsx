@@ -8,6 +8,7 @@ import { Loader } from '../ui/Loader';
 import { SocialButton } from '../ui/SocialButton';
 import { Lock, Cpu, ArrowLeft, ShieldCheck } from 'lucide-react';
 
+
 interface LoginPageProps {
   onSwitchToSignUp: () => void;
   onSwitchToForgotPassword: () => void;

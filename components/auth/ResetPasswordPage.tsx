@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { useApi } from '../../hooks/useApi';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Loader } from '../ui/Loader';
-import { LockKeyhole, ShieldCheck, AlertCircle, ArrowLeft, Terminal } from 'lucide-react';
+import { LockKeyhole, ShieldCheck, AlertCircle, ArrowLeft, Terminal, Mail, KeyRound } from 'lucide-react';
+
 
 interface ResetPasswordPageProps {
   token: string;
@@ -14,9 +15,16 @@ interface ResetPasswordPageProps {
 
 export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ token, onSuccess, onSwitchToLogin }) => {
   const { resetPassword } = useAppContext();
+  
+  const [email, setEmail] = useState('');
+  const [otp, setOtp] = useState(token || '');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
+
+  useEffect(() => {
+    if (token) setOtp(token);
+  }, [token]);
 
   const { 
     execute: executeReset, 
@@ -26,6 +34,10 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ token, onS
 
   const validate = () => {
     const newErrors: { [key: string]: string } = {};
+
+    if (!email) newErrors.email = 'Email address required.';
+    if (!otp) newErrors.otp = 'Verification code required.';
+    
     if (!newPassword) {
       newErrors.newPassword = 'New key required.';
     } else if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(newPassword)) {
@@ -46,14 +58,13 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ token, onS
     setValidationErrors({});
     
     if (!validate()) return;
-    
-    if (!token.trim()) {
-        setValidationErrors({ form: "ERR_INVALID_TOKEN: MISSING"});
-        return;
-    }
 
     try {
-      await executeReset(token, newPassword);
+      await executeReset({ 
+        email: email.trim(), 
+        otp: otp.trim(), 
+        password: newPassword 
+      });
       onSuccess();
     } catch (error) {
       // Hook handles the toast/error state
@@ -63,20 +74,17 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ token, onS
   return (
     <div className="relative min-h-screen w-full flex flex-col items-center justify-center bg-black text-white selection:bg-red-500/30 selection:text-red-200 overflow-hidden">
 
-      {/* 1. Global Noise Texture */}
+      {/* Global Noise Texture */}
       <div className="fixed inset-0 z-[1] opacity-[0.04] pointer-events-none mix-blend-overlay"
            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}>
       </div>
 
-      {/* 2. Ambient Background */}
+      {/* Ambient Background */}
       <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
         <div className="absolute bottom-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-zinc-800/20 blur-[120px] rounded-full animate-pulse duration-[8s]" />
       </div>
 
-      {/* Dot Matrix Overlay */}
-      <div className="fixed inset-0 dot-matrix opacity-[0.03] z-0 pointer-events-none" />
-
-      {/* 3. Tech Navbar */}
+      {/* Tech Navbar */}
       <nav className="fixed top-0 w-full z-50 px-6 py-6 flex justify-between items-center mix-blend-difference text-zinc-500">
          <button onClick={onSwitchToLogin} className="flex items-center gap-2 hover:text-white transition-colors group">
             <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform"/>
@@ -91,25 +99,51 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ token, onS
       {/* MAIN CONTAINER */}
       <div className="relative z-10 w-full max-w-md p-6">
         
-        {/* Aesthetic Border Container */}
         <div className="relative group">
-            {/* Animated Glow Border */}
             <div className="absolute -inset-0.5 bg-gradient-to-r from-zinc-700 via-red-900 to-zinc-700 rounded-lg blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
             
             <div className="relative bg-zinc-900/80 backdrop-blur-xl border border-white/10 p-8 rounded-lg shadow-2xl">
                 
-                {/* Header Section */}
                 <div className="mb-8 flex flex-col items-center text-center space-y-2">
                     <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center border border-white/10 mb-2">
                         <LockKeyhole size={20} className="text-white" />
                     </div>
                     <h2 className="text-2xl font-bold tracking-tight text-white">UPDATE CREDENTIALS</h2>
-                    <p className="text-sm text-zinc-500 font-mono tracking-wide">ENTER NEW SECURITY KEY</p>
+                    <p className="text-sm text-zinc-500 font-mono tracking-wide">ENTER CODE & NEW KEY</p>
                 </div>
 
-                {/* Form Section */}
                 <form onSubmit={handleSubmit} className="space-y-5">
                     <div className="space-y-4">
+                        <div className="relative">
+                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 w-4 h-4" />
+                            <Input
+                                id="email"
+                                label="Email Address"
+                                placeholder="Confirmed Email Address"
+                                type="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                error={validationErrors.email}
+                                disabled={isLoading}
+                                className="pl-10 bg-black/50 border-white/10 focus:border-red-500/50 text-white placeholder:text-zinc-700 font-mono text-sm"
+                            />
+                        </div>
+
+                        <div className="relative">
+                            <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 w-4 h-4" />
+                            <Input
+                                id="otp"
+                                label="Verification Code"
+                                placeholder="Verification Code (OTP)"
+                                type="text"
+                                value={otp}
+                                onChange={(e) => setOtp(e.target.value)}
+                                error={validationErrors.otp}
+                                disabled={isLoading}
+                                className="pl-10 bg-black/50 border-white/10 focus:border-red-500/50 text-white placeholder:text-zinc-700 font-mono text-sm"
+                            />
+                        </div>
+
                         <Input
                             id="new-password"
                             label="New Passcode"
@@ -132,7 +166,6 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ token, onS
                         />
                     </div>
                     
-                    {/* Error Display Block */}
                     {(validationErrors.form || apiError) && (
                          <div className="p-3 bg-red-900/20 border border-red-500/20 rounded flex items-start gap-3">
                             <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
@@ -156,7 +189,6 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ token, onS
                     </Button>
                 </form>
 
-                {/* Footer Link */}
                 <div className="mt-8 pt-6 border-t border-white/5 text-center">
                     <button type="button" onClick={onSwitchToLogin} className="flex items-center justify-center gap-2 mx-auto text-xs text-zinc-500 hover:text-white transition-colors group">
                          <Terminal size={12} />
@@ -165,7 +197,7 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ token, onS
                 </div>
             </div>
             
-            {/* Decorative Tech Corners */}
+            {/* Decorative Corners */}
             <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-white/30 rounded-tl-sm"></div>
             <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-white/30 rounded-tr-sm"></div>
             <div className="absolute bottom-0 left-0 w-2 h-2 border-b border-l border-white/30 rounded-bl-sm"></div>
