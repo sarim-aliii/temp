@@ -1,9 +1,9 @@
 import { Socket } from 'socket.io';
 import { IUser } from './models/User';
 
-
 export interface AuthenticatedSocket extends Socket {
   user?: IUser;
+  userId?: string;
   roomId?: string;
   isBuffering?: boolean;
 }
@@ -52,6 +52,7 @@ export interface IJournalEntry {
 }
 
 export interface RoomState {
+  roomId: string;
   videoSource: VideoSource;
   playbackState: PlaybackState;
   messages: ChatMessage[];

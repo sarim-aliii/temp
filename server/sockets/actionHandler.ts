@@ -1,13 +1,12 @@
 import { Server, Socket } from 'socket.io';
 import crypto from 'crypto';
 import { ClientAction, AuthenticatedSocket, ChatMessage } from '../types';
-import { roomState, getDefaultRoomState } from '../state/roomStore';
+import { getRoomState, saveRoomState, getDefaultRoomState } from '../state/roomStore';
 import JournalEntry from '../models/JournalEntry';
 import User from '../models/User';
 import Message from '../models/Message';
 import Logger from '../utils/logger';
 import { sendNotification } from '../utils/pushService';
-
 
 export const handleClientAction = async (
   io: Server,
@@ -18,11 +17,17 @@ export const handleClientAction = async (
   const authSocket = socket as unknown as AuthenticatedSocket;
   const rid = authSocket.roomId;
 
-  if (!rid || !roomState[rid]) return;
+  if (!rid) return;
+
+  // --- 1. FETCH STATE FROM REDIS ---
+  let currentState = await getRoomState(rid);
+  if (!currentState) {
+      // Optional: Re-initialize or return error.
+      return; 
+  }
 
   Logger.debug(`[Room: ${rid}] Action: ${action.type} from ${user.email}`);
 
-  const currentState = roomState[rid];
   const serverTime = Date.now();
 
   // Handle buffering recovery
@@ -45,7 +50,7 @@ export const handleClientAction = async (
     case 'UPDATE_VIDEO_SOURCE':
       currentState.videoSource = action.payload;
       currentState.playbackState = {
-        ...getDefaultRoomState().playbackState,
+        ...getDefaultRoomState(rid).playbackState,
         isPlaying: false,
         lastUpdateTimestamp: serverTime,
       };
@@ -61,21 +66,23 @@ export const handleClientAction = async (
         senderId: user._id.toString(),
         senderName: user.name,
         senderAvatar: user.avatar,
-        content: content || (image ? 'Image Attachment' : ''), // Fallback content if only image
-        image: image, // Add image to payload
+        content: content || (image ? 'Image Attachment' : ''), 
+        image: image, 
         type: type as 'text' | 'audio' | 'image' | 'system',
         timestamp: new Date().toISOString(),
       };
 
-      // 2. Emit to Room
+      // 2. Emit to Room immediately
       io.to(rid).emit('newChatMessage', messageData);
 
-      // 3. Update in-memory state
+      // 3. Update State
       if (currentState.messages.length > 50) currentState.messages.shift();
       currentState.messages.push(messageData);
-      roomState[rid] = currentState;
+      
+      // --- SAVE TO REDIS BEFORE RETURNING ---
+      await saveRoomState(rid, currentState);
 
-      // 4. PERSIST: Save to MongoDB
+      // 4. PERSIST: Save to MongoDB (Async)
       try {
         await Message.create({
           roomId: rid,
@@ -83,20 +90,21 @@ export const handleClientAction = async (
           senderName: user.name,
           senderAvatar: user.avatar,
           content: content || (image ? 'Image Attachment' : ''),
-          image: image, // Persist image
+          image: image,
           type
         });
       } catch (error) {
         Logger.error("❌ Failed to save message to DB:", error);
       }
 
+      // 5. Send Notification
       try {
         const partner = await User.findById(user.pairedWithUserId);
         if (partner && partner.pushSubscription) {
           const payload = {
             title: user.name || 'Partner',
             body: action.payload.content || (image ? 'Sent an image' : 'New Message'),
-            url: '/', // Link to open
+            url: '/', 
             icon: '/pwa-192x192.png'
           };
           sendNotification(partner.pushSubscription, payload);
@@ -105,14 +113,13 @@ export const handleClientAction = async (
         console.error("Push trigger failed:", err);
       }
 
-      return;
+      return; // Early return for messages
     }
 
     case 'SET_TYPING':
       currentState.typingUser = action.payload.isTyping ? user.email : null;
       socket.to(rid).emit('partnerTyping', currentState.typingUser);
-      roomState[rid] = currentState;
-      return;
+      break;
 
     case 'UPDATE_PLAYBACK_TIME':
       currentState.playbackState.currentTime = action.payload.currentTime;
@@ -143,9 +150,12 @@ export const handleClientAction = async (
           createdAt: savedEntry.createdAt,
           updatedAt: savedEntry.updatedAt,
         };
+        
         currentState.journalEntries.push(clientEntry as any);
         io.to(rid).emit('newJournalEntry', clientEntry);
-        roomState[rid] = currentState;
+        
+        // Save state after adding journal entry
+        await saveRoomState(rid, currentState);
         return;
       } catch (e) {
         Logger.error("Failed to save journal entry:", e);
@@ -173,7 +183,7 @@ export const handleClientAction = async (
       return;
   }
 
-  // Sync state after update
-  roomState[rid] = currentState;
+  await saveRoomState(rid, currentState);
+
   io.to(rid).emit('serverUpdateState', currentState);
 };

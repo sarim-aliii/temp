@@ -6,40 +6,55 @@ import JournalEntry from '../models/JournalEntry';
 import Message from '../models/Message';
 import Logger from '../utils/logger';
 import { getRoomId } from '../utils/roomUtils';
-import { roomState, roomTimers, getDefaultRoomState } from '../state/roomStore';
+import { getRoomState, saveRoomState, getDefaultRoomState, roomTimers } from '../state/roomStore'; 
 import { handleClientAction } from './actionHandler';
+
 
 // --- Constants ---
 const SYNC_INTERVAL = 1500;
-const FREE_TRIAL_LIMIT = 24 * 60 * 60 * 1000;
+const FREE_TRIAL_LIMIT = 24 * 60 * 60 * 1000; // 24 Hours
 
 export const initSocketServer = (io: Server) => {
   
-  // 1. Master Clock / Sync Loop
-  setInterval(() => {
+  setInterval(async () => {
     const now = Date.now();
-    for (const roomId in roomState) {
-      const state = roomState[roomId];
-      // const timeInRoom = now - state.createdAt;
+    
+    // Iterate only over rooms that have active connections on this server
+    const activeRooms = io.sockets.adapter.rooms;
+
+    for (const [roomId, sockets] of activeRooms) {
+      // Filter out non-chat rooms (socket IDs are also rooms)
+      if (sockets.size === 0 || roomId.length < 20) continue; 
+
+      // Fetch state from Redis
+      const state = await getRoomState(roomId);
+      if (!state) continue;
+
+      let hasChanges = false;
 
       // Check Free Trial
       if (!state.isPremium && (now - state.createdAt) > FREE_TRIAL_LIMIT && state.videoSource.type !== null) {
-        // Logger.warn(`[Room: ${roomId}] Free trial expired.`);
         state.videoSource = { type: null, src: null };
         state.playbackState.isPlaying = false;
-        io.to(roomId).emit('serverUpdateState', state);
+        
         io.to(roomId).emit('serverNotification', { 
             type: 'error', 
             message: 'Free trial expired. Go premium to continue.' 
         });
-        continue;
+        hasChanges = true;
       }
 
-      // Advance Clock
+      // Advance Clock if Playing
       if (state.playbackState.isPlaying) {
         const timeElapsed = now - state.playbackState.lastUpdateTimestamp;
         state.playbackState.currentTime += (timeElapsed / 1000) * state.playbackState.playbackRate;
         state.playbackState.lastUpdateTimestamp = now;
+        hasChanges = true;
+      }
+
+      // Save and Broadcast if changed
+      if (hasChanges) {
+        await saveRoomState(roomId, state);
         io.to(roomId).emit('serverUpdateState', state);
       }
     }
@@ -49,7 +64,6 @@ export const initSocketServer = (io: Server) => {
   io.use(async (socket: Socket, next) => {
     const token = socket.handshake.auth.token;
     if (!token) {
-        Logger.warn(`[Socket Auth] Connection rejected: No token provided from ${socket.handshake.address}`);
         return next(new Error('No token provided.'));
     }
 
@@ -57,13 +71,11 @@ export const initSocketServer = (io: Server) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { id: string };
       const user = await User.findById(decoded.id);
       if (!user) {
-          Logger.warn(`[Socket Auth] Connection rejected: User not found for token ID ${decoded.id}`);
           return next(new Error('User not found.'));
       }
       (socket as unknown as AuthenticatedSocket).user = user;
       next();
     } catch (err: any) {
-      Logger.warn(`[Socket Auth] Connection rejected: Invalid token from ${socket.handshake.address}. Error: ${err.message}`);
       next(new Error('Invalid token.'));
     }
   });
@@ -81,49 +93,55 @@ export const initSocketServer = (io: Server) => {
 
     const roomId = getRoomId(user._id.toString(), user.pairedWithUserId.toString());
     authSocket.roomId = roomId;
+    authSocket.userId = user._id.toString();
     socket.join(roomId);
 
-    // Cancel deletion timer
+    // Cancel deletion timer if it exists (in-memory timer is fine for short disconnected grace periods)
     if (roomTimers[roomId]) {
       clearTimeout(roomTimers[roomId]);
       delete roomTimers[roomId];
     }
 
-    // Initialize Room if needed
-    if (!roomState[roomId]) {
-      roomState[roomId] = getDefaultRoomState();
+    // --- Initialize Room State from Redis ---
+    let currentState = await getRoomState(roomId);
+
+    if (!currentState) {
+      Logger.info(`[Redis] Initializing new room: ${roomId}`);
+      currentState = getDefaultRoomState(roomId);
+      
       try {
         const partner = await User.findById(user.pairedWithUserId);
         const isPremium = user.isPremium || partner?.isPremium || false;
         
-        // Load Journal Entries
+        // Load Data from DB
         const entries = await JournalEntry.find({ roomId }).sort({ createdAt: 'asc' });
-        
-        // Load Chat History (Last 50 messages)
         const messages = await Message.find({ roomId })
-          .sort({ createdAt: -1 }) // Get newest first
+          .sort({ createdAt: -1 })
           .limit(50);
         
-        // Reverse back to chronological order for the client
         const history = messages.reverse().map(msg => ({
           id: msg._id.toString(),
           senderId: msg.senderId.toString(),
           senderName: msg.senderName,
           senderAvatar: msg.senderAvatar,
           content: msg.content,
+          image: msg.image, 
           type: msg.type,
           timestamp: msg.createdAt.toISOString()
         }));
 
-        roomState[roomId].journalEntries = entries.map(e => ({
+        currentState.journalEntries = entries.map(e => ({
           ...e.toObject(),
           _id: e._id.toString(),
           authorId: e.authorId.toString()
         })) as any;
 
-        roomState[roomId].messages = history as any;
-        roomState[roomId].isPremium = isPremium;
-        roomState[roomId].createdAt = Date.now();
+        currentState.messages = history as any;
+        currentState.isPremium = isPremium;
+        
+        // Save initialized state to Redis
+        await saveRoomState(roomId, currentState);
+
       } catch (e) {
         Logger.error("Error loading room data", e);
       }
@@ -141,12 +159,14 @@ export const initSocketServer = (io: Server) => {
       }
     }
 
+    // Emit Join Event
     socket.emit('room-joined', {
       roomId,
-      initialState: roomState[roomId],
+      initialState: currentState,
       sessionId: socket.id,
       partnerSocketId,
     });
+    
     socket.to(roomId).emit('partner-online', socket.id);
 
     // --- Events ---
@@ -155,10 +175,6 @@ export const initSocketServer = (io: Server) => {
     socket.on('reportBuffering', (isBuffering: boolean) => {
       authSocket.isBuffering = isBuffering;
       socket.to(roomId).emit('partnerBuffering', isBuffering);
-      
-      if (!isBuffering && !roomState[roomId].playbackState.isPlaying) {
-         // Logic to resume if partner is also ready could go here
-      }
     });
 
     socket.on('p2pSignal', (payload) => {
@@ -166,21 +182,15 @@ export const initSocketServer = (io: Server) => {
     });
 
     socket.on('disconnect', () => {
-      Logger.info(`User ${user.email} disconnected`);
-      if (roomId && roomState[roomId]) {
+      // Logger.info(`User ${user.email} disconnected`);
+      if (roomId) {
         socket.to(roomId).emit('partner-offline', socket.id);
         
-        // Grace Period / Room Deletion
+        // Grace Period Logic
         setTimeout(() => {
            const room = io.sockets.adapter.rooms.get(roomId);
            if (!room || room.size === 0) {
-             roomTimers[roomId] = setTimeout(() => {
-               const checkRoom = io.sockets.adapter.rooms.get(roomId);
-               if (!checkRoom || checkRoom.size === 0) {
-                 delete roomState[roomId];
-                 delete roomTimers[roomId];
-               }
-             }, 60000);
+
            }
         }, 500);
       }
